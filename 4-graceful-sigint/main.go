@@ -13,10 +13,36 @@
 
 package main
 
+import (
+	"os"
+	"os/signal"
+)
+
+func onSigint(terminationFunc func(), stop <-chan struct{}) {
+	go func() {
+		interruptChan := make(chan os.Signal, 1)
+		defer close(interruptChan)
+		signal.Notify(interruptChan, os.Interrupt)
+		for {
+			select {
+			case <-interruptChan:
+				killswitch := func() { os.Exit(1) }
+				onSigint(killswitch, stop)
+				terminationFunc()
+				return
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
 func main() {
 	// Create a process
 	proc := MockProcess{}
-
+	stop := make(chan struct{})
+	defer close(stop)
+	onSigint(proc.Stop, stop)
 	// Run the process (blocking)
 	proc.Run()
 }
